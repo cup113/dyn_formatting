@@ -3,15 +3,15 @@
 use std::collections::HashMap;
 
 /// Simple, dynamic, Python-styled string formatting (Only support `String`,
-/// `{key}` patterns ).
+/// `{key}` patterns).
 ///
 /// Escape like `{{` or `}}`.
 ///
 /// ## Errors
 ///
-/// 1. Raise `CheckerError::ArgFormattingKeyError` while the key in the brackets
-///    is not found.
-/// 2. Raise `CheckerError::ArgFormattingTokenError` while there is any
+/// 1. Raise `DynamicFormatError::KeyError` while the key in the brackets
+///    is not found in `dictionary`.
+/// 2. Raise `DynamicFormatError::TokenError` while there is any
 ///    unmatched bracket (`{` or `}`)
 ///
 /// ## Examples

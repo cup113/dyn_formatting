@@ -1,6 +1,6 @@
 [package]
 name = "dyn_formatting"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "A library provides limited Python-style safe dynamic (runtime) formatting support for Rust"
 license = "MIT"
