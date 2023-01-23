@@ -1,0 +1,12 @@
+[package]
+name = "dyn_formatting"
+version = "1.0.0"
+edition = "2021"
+description = "A library provides limited Python-style safe dynamic (runtime) formatting support for Rust"
+license = "MIT"
+documentation = "https://docs.rs/dyn_formatting"
+repository = "https://github.com/cup113/dyn_formatting"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
