@@ -1,8 +1,0 @@
-on: push
-jobs:
-  coverage-job:
-    name: Coverage Job
-    runs-on: ubuntu-latest
-    steps:
-    - name: Rust Code Coverage
-      uses: Swatinem/fucov@v1.0.0
