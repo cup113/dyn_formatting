@@ -1,5 +1,5 @@
 on: push
 jobs:
   coverage-job:
-  - name: Rust Code Coverage
+    name: Rust Code Coverage
     uses: Swatinem/fucov@v1.0.0
