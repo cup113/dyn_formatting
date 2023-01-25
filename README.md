@@ -1,22 +1,15 @@
 # Dynamic Formatting README
 
-Simple, dynamic, Python-styled string formatting (Only support `String`,
-`{key}` patterns).
+Lightweight, dynamic, Python-styled string formatting (Only support `String`,
+`{key}` patterns). It only needs `std` to work.
 
 Escape like `{{` or `}}`.
 
 ## Install
 
 ```bash
-cargo add dyn_formatting@2.0.0
+cargo add dyn_formatting@3.0.0
 ```
-
-## Errors
-
-1. Raise `DynamicFormatError::KeyError` while the key in the brackets
-   is not found in `dictionary`.
-2. Raise `DynamicFormatError::TokenError` while there is any
-   unmatched bracket (`{` or `}`)
 
 ## Examples
 

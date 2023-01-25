@@ -4,16 +4,18 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
 
-/// Simple, dynamic, Python-styled string formatting (Only support `String`,
-/// `{key}` patterns).
+/// Lightweight, dynamic, Python-styled string formatting (Only support `String`,
+/// `{key}` patterns). It only needs `std` to work.
 ///
-/// Escape like `{{` or `}}`.
+/// Escape patterns are `{{` and `}}`.
+///
+/// It returns the formatted string.
 ///
 /// ## Errors
 ///
-/// 1. Raise `DynamicFormatError::KeyError` while the key in the brackets
+/// 1. Error kind `DynamicFormatErrorKind::KeyError` if the key in the brackets
 ///    is not found in `dictionary`.
-/// 2. Raise `DynamicFormatError::TokenError` while there is any
+/// 2. Error kind `DynamicFormatErrorKind::TokenError` if there is any
 ///    unmatched bracket (`{` or `}`)
 ///
 /// ## Examples
@@ -66,65 +68,69 @@ use std::fmt::Display;
 pub fn dynamic_format(
     pattern: &str,
     dictionary: &HashMap<&str, &str>,
-) -> Result<String, DynamicFormatError> {
+) -> Result<String, Box<DynamicFormatError>> {
     if pattern.find('{') == None && pattern.find('}') == None {
         return Ok(pattern.to_string());
     }
     let chars: Vec<char> = pattern.chars().collect();
     let mut ans: String = String::with_capacity(pattern.len());
-    let mut left_bracket = (false, 0usize);
-    let mut right_bracket = (false, 0usize);
+    let mut left_brace = (false, 0usize);
+    let mut right_brace = (false, 0usize);
     let mut key = String::with_capacity(16);
+
+    macro_rules! token_error {
+        ($pos: expr, $msg: expr) => {
+            return Err(Box::new(DynamicFormatError {
+                pattern: pattern.to_string(),
+                pos: $pos,
+                kind: DynamicFormatErrorKind::TokenError { desc: $msg.into() },
+            }));
+        };
+    }
 
     for (i, c) in chars.iter().enumerate() {
         if *c == '{' {
-            if left_bracket.0 {
-                if left_bracket.1 + 1 == i {
+            if left_brace.0 {
+                if left_brace.1 + 1 == i {
                     ans.push('{');
-                    left_bracket = (false, 0);
+                    left_brace = (false, 0);
                 } else {
-                    return Err(DynamicFormatError::TokenError {
-                        pattern: pattern.to_owned(),
-                        desc: "Unmatched token '{'".into(),
-                        pos: left_bracket.1 + 1,
-                    });
+                    token_error!(left_brace.1, "Unmatched token '{'");
                 }
             } else {
-                left_bracket = (true, i);
+                left_brace = (true, i);
             }
         } else if *c == '}' {
-            if right_bracket.0 {
-                if right_bracket.1 + 1 == i {
+            if right_brace.0 {
+                if right_brace.1 + 1 == i {
                     ans.push('}');
-                    right_bracket = (false, 0);
+                    right_brace = (false, 0);
                 } else {
-                    return Err(DynamicFormatError::TokenError {
-                        pattern: pattern.to_owned(),
-                        desc: "Unmatched token '}'".into(),
-                        pos: right_bracket.1 + 1,
-                    });
+                    token_error!(right_brace.1, "Unmatched token '}'");
                 }
-            } else if left_bracket.0 {
+            } else if left_brace.0 {
                 if let Some(s) = dictionary.get(key.as_str()) {
                     ans.push_str(s);
                 } else {
-                    return Err(DynamicFormatError::KeyError {
+                    return Err(Box::new(DynamicFormatError {
                         pattern: pattern.to_string(),
-                        key,
-                        dict: dictionary
-                            .iter()
-                            .map(|s| (s.0.to_string(), s.1.to_string()))
-                            .collect(),
-                        pos: left_bracket.1 + 1,
-                    });
+                        pos: left_brace.1,
+                        kind: DynamicFormatErrorKind::KeyError {
+                            key,
+                            entries: dictionary
+                                .iter()
+                                .map(|s| (s.0.to_string(), s.1.to_string()))
+                                .collect(),
+                        },
+                    }));
                 }
                 key.clear();
-                left_bracket = (false, 0);
+                left_brace = (false, 0);
             } else {
-                right_bracket = (true, i);
+                right_brace = (true, i);
             }
         } else {
-            if left_bracket.0 {
+            if left_brace.0 {
                 key.push(*c);
             } else {
                 ans.push(*c);
@@ -132,64 +138,65 @@ pub fn dynamic_format(
         }
     }
 
-    if left_bracket.0 {
-        return Err(DynamicFormatError::TokenError {
-            pattern: pattern.to_string(),
-            desc: "Unmatched token '{'".into(),
-            pos: left_bracket.1,
-        });
+    if left_brace.0 {
+        token_error!(left_brace.1, "Unmatched token '{'");
     }
-    if right_bracket.0 {
-        return Err(DynamicFormatError::TokenError {
-            pattern: pattern.to_string(),
-            desc: "Unmatched token '}'".into(),
-            pos: right_bracket.1,
-        });
+    if right_brace.0 {
+        token_error!(right_brace.1, "Unmatched token '}'");
     }
 
     Ok(ans)
 }
 
-#[derive(Debug)]
-pub enum DynamicFormatError {
+/// Error types during dynamic formatting.
+#[derive(Debug, Clone)]
+pub struct DynamicFormatError {
+    /// The pattern which causes error.
+    pub pattern: String,
+    /// The position (index) where the error occurs.
+    /// Start from 0 itself, but from 1 when formatting.
+    pub pos: usize,
+    /// Error kind.
+    pub kind: DynamicFormatErrorKind,
+}
+
+/// Kinds of error. Provide more information of the error.
+#[derive(Debug, Clone)]
+pub enum DynamicFormatErrorKind {
+    /// The token (formatting grammar) is wrong.
     TokenError {
-        pattern: String,
+        /// The brief description of error.
         desc: String,
-        pos: usize,
     },
+    /// The key (in braces) is not found in the dictionary.
     KeyError {
-        pattern: String,
+        /// The key which is not found.
         key: String,
-        dict: Vec<(String, String)>,
-        /// Start from 1
-        pos: usize,
+        /// The entries of the dictionary. It is used to provide help information.
+        entries: Vec<(String, String)>,
     },
 }
 
 impl Display for DynamicFormatError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::TokenError { pattern, desc, pos } => write!(
+        match &self.kind {
+            DynamicFormatErrorKind::TokenError { desc } => write!(
                 f,
                 "Parse arguments failed: Token Error ({}) when \
                 parsing pattern \"{}\" at pos {}.",
-                desc, pattern, pos
+                desc, self.pattern, self.pos
             ),
-            Self::KeyError {
-                pattern,
-                key,
-                pos,
-                dict,
-            } => write!(
+            DynamicFormatErrorKind::KeyError { key, entries } => write!(
                 f,
                 "Parse arguments failed: Key Not Found \
                 (key: \"{}\") when parsing pattern \"{}\" at pos {}.\n\
                 Help: These are valid key-value pairs:\n{}",
                 key,
-                pattern,
-                pos,
-                dict.iter()
-                    .map(|(key, value)| format!("{}: {}", key, value))
+                self.pattern,
+                self.pos + 1,
+                entries
+                    .iter()
+                    .map(|(key, value)| format!("- {}: {}", key, value))
                     .collect::<Vec<_>>()
                     .join("\n"),
             ),
@@ -201,8 +208,8 @@ impl Error for DynamicFormatError {}
 
 #[cfg(test)]
 mod tests {
-    use super::dynamic_format;
-    use super::DynamicFormatError::*;
+    use super::*;
+    use DynamicFormatErrorKind::*;
 
     macro_rules! dynamic_format {
         ($pattern: expr, $dict_list: expr) => {
@@ -272,24 +279,27 @@ mod tests {
 
     #[test]
     fn test_key_error() {
-        match dynamic_format!("{abc}", [("abd", "1")]) {
-            Err(KeyError {
+        match *dynamic_format!("{abc}", [("abd", "1")]).unwrap_err() {
+            DynamicFormatError {
                 pattern,
-                key,
                 pos,
-                dict,
-            }) => {
+                kind: KeyError { key, entries },
+            } => {
                 assert_eq!(pattern.as_str(), "{abc}");
                 assert_eq!(key, "abc");
-                assert_eq!(dict, vec![("abd".into(), "1".into())]);
-                assert_eq!(pos, 1);
+                assert_eq!(entries, vec![("abd".into(), "1".into())]);
+                assert_eq!(pos, 0);
             }
             _ => unreachable!(),
         }
-        match dynamic_format!("234{ac}{ab}", [("ac", "1"), ("aa", ".")]) {
-            Err(KeyError { key, pos, .. }) => {
+        match *dynamic_format!("234{ac}{ab}", [("ac", "1"), ("aa", ".")]).unwrap_err() {
+            DynamicFormatError {
+                pos,
+                kind: KeyError { key, .. },
+                ..
+            } => {
                 assert_eq!(key, "ab");
-                assert_eq!(pos, 8);
+                assert_eq!(pos, 7);
             }
             _ => unreachable!(),
         }
@@ -297,34 +307,59 @@ mod tests {
 
     #[test]
     fn test_token_error() {
-        match dynamic_format!("{abc", [("abc", "1")]) {
-            Err(TokenError { pattern, desc, pos }) => {
+        match *dynamic_format!("{abc", [("abc", "1")]).unwrap_err() {
+            DynamicFormatError {
+                pattern,
+                pos,
+                kind: TokenError { desc },
+            } => {
                 assert_eq!(pattern.as_str(), "{abc");
                 assert!(desc.contains("'{'"));
                 assert_eq!(pos, 0);
             }
             _ => unreachable!(),
         }
-        match dynamic_format!("{{a}}}324", []) {
-            Err(TokenError { desc, pos, .. }) => {
+        match *dynamic_format!("{{a}}}324", []).unwrap_err() {
+            DynamicFormatError {
+                pos,
+                kind: TokenError { desc },
+                ..
+            } => {
                 assert!(desc.contains("'}'"));
                 assert_eq!(pos, 5);
             }
             _ => unreachable!(),
         }
-        match dynamic_format!("{na{me}324", []) {
-            Err(TokenError { desc, pos, .. }) => {
+        match *dynamic_format!("{na{me}324", []).unwrap_err() {
+            DynamicFormatError {
+                pos,
+                kind: TokenError { desc },
+                ..
+            } => {
                 assert!(desc.contains("'{'"));
-                assert_eq!(pos, 1);
+                assert_eq!(pos, 0);
             }
             _ => unreachable!(),
         }
-        match dynamic_format!("name}3}24", []) {
-            Err(TokenError { desc, pos, .. }) => {
+        match *dynamic_format!("name}3}24", []).unwrap_err() {
+            DynamicFormatError {
+                pos,
+                kind: TokenError { desc },
+                ..
+            } => {
                 assert!(desc.contains("'}'"));
-                assert_eq!(pos, 5);
+                assert_eq!(pos, 4);
             }
             _ => unreachable!(),
         }
+    }
+
+    #[test]
+    fn test_error_display() {
+        println!("{}", dynamic_format!("name}3}24", []).unwrap_err());
+        println!(
+            "{}",
+            dynamic_format!("234{ac}{ab}", [("ac", "1"), ("aa", ".")]).unwrap_err()
+        );
     }
 }
